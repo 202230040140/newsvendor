@@ -17,6 +17,7 @@ np.random.seed(seed=4)
 import sys
 a = int(sys.argv[0].split('-')[2])
 
+from sklearn import model_selection
 
 if a == 1:
     cluster=1
@@ -31,6 +32,7 @@ elif a==200:
     cluster=200
     total=1300
 
+os.makedirs('data/lognormal', exist_ok=True)
 
 # Use all the SQL you like
 random_demand = np.random.lognormal(2, 0.5, total)
@@ -70,15 +72,18 @@ for row in random_demand:
 #-------------------------------------------------------------------------------------------------------------------------
 
 # Split into train and test                                                                                                                      
-X, Xt, y, yt, ind, indt = sklearn.cross_validation.train_test_split(inputs, suma, index, train_size=7500)
+X, Xt, y, yt, ind, indt = model_selection.train_test_split(inputs, suma, index, train_size=7500)
 
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/IndexX-nw-10000-1-class', mdict={'IndexX': ind})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/IndexY-nw-10000-1-class', mdict={'IndexY': indt})
+y = np.array(y)
+yt = np.array(yt)
 
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/TrainX-nw-10000-1-class', mdict={'trainX': X})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/TrainY-nw-10000-1-class', mdict={'trainY': y})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/TestX-nw-10000-1-class', mdict={'testX': Xt})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/lognormal/TestY-nw-10000-1-class', mdict={'testY': yt})
+sio.savemat('data/lognormal/IndexX-nw-10000-1-class.mat', mdict={'IndexX': ind})
+sio.savemat('data/lognormal/IndexY-nw-10000-1-class.mat', mdict={'IndexY': indt})
+
+sio.savemat('data/lognormal/TrainX-nw-10000-1-class.mat', mdict={'trainX': X})
+sio.savemat('data/lognormal/TrainY-nw-10000-1-class.mat', mdict={'trainY': y})
+sio.savemat('data/lognormal/TestX-nw-10000-1-class.mat', mdict={'testX': Xt})
+sio.savemat('data/lognormal/TestY-nw-10000-1-class.mat', mdict={'testY': yt})
 
 
 Trainh5 = 'Train-nw-10000-1-class.h5'
@@ -126,4 +131,6 @@ with h5py.File(test_filename, 'w') as f:
     f.create_dataset('label', data=yt.astype(np.float32), **comp_kwargs)
 with open(os.path.join(dirname, Testtxt), 'w') as f:
     f.write(test_filename + '\n')
+
+print("done")
 

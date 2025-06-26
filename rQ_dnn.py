@@ -1,5 +1,7 @@
 import sys 
 import os
+
+#import bb
 # os.environ["CUDA_VISIBLE_DEVICES"]= str(2)
 import tensorflow as tf
 import numpy as np
@@ -8,13 +10,16 @@ import scipy.stats as sts
 import pandas as pd 
 import time 
 
-tf.logging.set_verbosity(tf.logging.FATAL)
+# tf.logging.set_verbosity(tf.logging.FATAL) # 旧版TensorFlow
+import logging
+
 import matplotlib.pyplot as plt
 
 from sklearn.neighbors import NearestNeighbors
 
 np.random.seed(4)
 import argparse
+import subprocess
 
 
 arg_lists = []
@@ -75,9 +80,9 @@ def update_checkpoint(str_num, addr):
     no_enter=False
     for line in fille:
         word_list = line.split(' ')
-        print word_list
+        print(word_list)
         for word in word_list:
-            print word
+            print(word)
 
             if '\n' in word:
                 word=re.sub('\n','', word)
@@ -97,7 +102,7 @@ def update_checkpoint(str_num, addr):
                     break
             out += word
         out += '\n'
-    print out
+    print(out)
     fille.close()
 
     fille = open(addr, "w+")
@@ -148,7 +153,7 @@ class rq(object):
             test_limit = 1+99
             if self.clusters != 1:            
                 self.train_x = train_mat_x[:,0,:]
-                print "self.train_x", np.shape(self.train_x)
+                print("self.train_x", np.shape(self.train_x))
                 self.test_x = test_mat_x[0:test_limit*2500,0,:]            
             else:
                 self.train_x = train_mat_x[:,:]
@@ -162,7 +167,7 @@ class rq(object):
             self.valid_y = np.squeeze(test_mat_y[0:1*2500])
             self.ind_valid = index_mat_test[0:1*2500,:]
             self.test_x = self.test_x[1*2500:test_limit*2500,:]
-            print "self.test_x", np.shape(self.test_x)
+            print("self.test_x", np.shape(self.test_x))
             self.test_y = np.squeeze(test_mat_y[1*2500:test_limit*2500])
             self.ind_test = index_mat_test[1*2500:test_limit*2500,:]
 
@@ -269,11 +274,11 @@ class rq(object):
         # if it is ture, it uses relu activation function, otherwise uses sigmoid 
         self.ifRelu = True
 
-        config_tf = tf.ConfigProto()
+        config_tf = tf.compat.v1.ConfigProto()
         # config_tf.gpu_options.per_process_gpu_memory_fraction = 0.1
         config_tf.gpu_options.allow_growth = True
         config_tf.intra_op_parallelism_threads = 1
-        self.sess = tf.InteractiveSession(config=config_tf)
+        self.sess = tf.compat.v1.InteractiveSession(config=config_tf)
         
         cur_dir=os.path.realpath("./saved_networks")
         cur_dir=os.path.join(cur_dir, self.dis)
@@ -401,11 +406,13 @@ class rq(object):
                     if np.abs(self.r_new[cls]-self.r_old) < epsilon:
                         notStop = False
             if self.if_print_eil_solutions:
-                print cls, '( %0.2f' %self.r_new[cls] ,', %0.2f' %self.Q_new[cls], ')', 'g(r,Q) is: %0.2f' %(
-                self.ch*(self.r_new[cls] - self.lambdaa*self.l[cls] + self.Q_new[cls]/2) +
-                self.K*self.lambdaa/self.Q_new[cls] + self.cp*self.lambdaa*self.nr/self.Q_new[cls])
-                , i, 'iterations'
-            
+                print("{} ( {:.2f} , {:.2f} ) g(r,Q) is: {:.2f} {} iterations".format(
+                    cls, self.r_new[cls], self.Q_new[cls],
+                    self.ch*(self.r_new[cls] - self.lambdaa*self.l[cls] + self.Q_new[cls]/2)
+                    + self.K*self.lambdaa/self.Q_new[cls]
+                    + self.cp*self.lambdaa*self.nr/self.Q_new[cls],
+                    i
+                ))
     # It gets EIL cost based on given self.r_new and self.Q_new, obtained by 
     # self.get_EIL_solution(). It goes over all demand (which are self.train_y, 
     # self.valid_y, self.test_y) 
@@ -430,22 +437,22 @@ class rq(object):
     def print_EIL_costs(self):
         '''print EIL cost for all avilable demand data'''
         # get optimal solutions 
-        print 'optimal solutions'
+        print('optimal solutions')
         cost_val = self.get_eil_cost(self.valid_y, self.ind_valid)
         cost_tr = self.get_eil_cost(self.train_y, self.ind_train)
-        print '\t \t optimal' , '\t', 'DNN'
-        print 'train \t %0.1f' %cost_tr
-        print 'valid \t %0.1f' %cost_val
+        print('\t \t optimal' , '\t', 'DNN')
+        print('train \t %0.1f' %cost_tr)
+        print('valid \t %0.1f' %cost_val)
 
     def get_aprx_solution(self):
-    '''get approximated solution of (r,Q) policy, since approximate the distribution by normal 
+        '''get approximated solution of (r,Q) policy, since approximate the distribution by normal 
 
-         It uses the approximated mu and sigma, obtained in self.get_mu_sigma
-         We assume *know* lambda. This is a much more reasonable assumption under the new parameters 
-         than under the old ones. Basically it means that we know the average demand per *year*, 
-         but the actual demand in any given lead time (2 weeks) depends on the features. 
-         Under the old parameters, we were saying we know the average demand per *day* but not the 
-         average demand over *5 days*, which doesn’t make sense.'''
+        It uses the approximated mu and sigma, obtained in self.get_mu_sigma
+        We assume *know* lambda. This is a much more reasonable assumption under the new parameters 
+        than under the old ones. Basically it means that we know the average demand per *year*, 
+        but the actual demand in any given lead time (2 weeks) depends on the features. 
+        Under the old parameters, we were saying we know the average demand per *day* but not the 
+        average demand over *5 days*, which doesn't make sense.'''
 
         def solve_nr(r):
             ''' for a given nr_ finds the r that obtains nr_'''
@@ -487,7 +494,7 @@ class rq(object):
             max_r = sts.norm.isf(1-(self.cp/(self.cp+self.ch+.0)), self.mu[cls], self.sigma[cls])
             while notStop:
                 i += 1
-        #         print "iteration ", i
+                # print "iteration ", i
                 # reset the value of r,Q
                 self.QP_old = self.QP_new[cls]
                 self.rP_old = self.rP_new[cls]
@@ -500,6 +507,7 @@ class rq(object):
                 sigma = self.sigma[cls]
                 mu = self.mu[cls]
                 nr_ = self.nr_
+                from scipy.optimize import minimize_scalar
                 res = minimize_scalar(solve_nr, method='Golden', bracket=(0,max_r))
                 # get_nr(res.x) -> gives the n(r) of the obtained r
                 self.rP_new[cls] = res.x
@@ -515,19 +523,22 @@ class rq(object):
                     if np.abs(self.rP_new[cls]-self.rP_old) < epsilon:
                         notStop = False
             if self.if_print_aprx_rq_solutions:
-                print cls, '( %0.2f' %(self.rP_new[cls]) ,', %0.2f' %self.QP_new[cls], ')', 'g(r,Q) is: %0.2f' \
-                %(self.ch*(self.rP_new[cls] - self.lambdaa*self.l[cls] + self.QP_new[cls]/2) +
-                self.K*self.lambdaa/self.QP_new[cls] +
-                (self.cp + self.ch)*self.lambdaa*self.n2r/self.QP_new[cls]) , i, 'iterations'
+                print("{} ( {:.2f} , {:.2f} ) g(r,Q) is: {:.2f} {} iterations".format(
+                    cls, self.rP_new[cls], self.QP_new[cls],
+                    self.ch*(self.rP_new[cls] - self.lambdaa*self.l[cls] + self.QP_new[cls]/2)
+                    + self.K*self.lambdaa/self.QP_new[cls]
+                    + (self.cp + self.ch)*self.lambdaa*self.n2r/self.QP_new[cls],
+                    i
+                ))
 
 
     def variable_builder_rand(self, shape):
-        return tf.Variable(np.random.normal(0, self.var, shape))
+        return tf.compat.v1.Variable(np.random.normal(0, self.var, shape))
 
     def variable_builder_fix(self, liste):
         result_list = [] 
         for i in liste:
-            result_list += [tf.Variable(i)]
+            result_list += [tf.compat.v1.Variable(i)]
         return result_list
 
     # creat dnn training method 
@@ -536,16 +547,16 @@ class rq(object):
         #from tensorflow.examples.tutorials.mnist import input_data
         # placeholders, which are the training data
 
-        self.x = tf.placeholder(tf.float64, shape=[None,self.input_dim], name='x')
-        self.y_ = tf.placeholder(tf.float64, shape=[None], name='y_')
-        self.init_IL = tf.placeholder(tf.float64, shape=[None,1], name='init_IL')
-        self.learning_rate = tf.placeholder(tf.float64, shape=[], name='lr')
-        self.zero = tf.placeholder(tf.float64, shape=[None,1], name='zero')
-        self.c_h = tf.placeholder(tf.float64, shape=[None,1], name='c_h')
-        self.c_p = tf.placeholder(tf.float64, shape=[None,1], name='c_p')
-        self.K_ = tf.placeholder(tf.float64, shape=[None,1], name='K')
-        self.L_ = tf.placeholder(tf.float64, shape=[None,1], name='L')
-        self.lambdaa_ = tf.placeholder(tf.float64, shape=[None,1], name='lambdaa')
+        self.x = tf.compat.v1.placeholder(tf.float64, shape=[None,self.input_dim], name='x')
+        self.y_ = tf.compat.v1.placeholder(tf.float64, shape=[None], name='y_')
+        self.init_IL = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='init_IL')
+        self.learning_rate = tf.compat.v1.placeholder(tf.float64, shape=[], name='lr')
+        self.zero = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='zero')
+        self.c_h = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='c_h')
+        self.c_p = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='c_p')
+        self.K_ = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='K')
+        self.L_ = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='L')
+        self.lambdaa_ = tf.compat.v1.placeholder(tf.float64, shape=[None,1], name='lambdaa')
 
         self.w=[]
         self.b=[]
@@ -573,8 +584,8 @@ class rq(object):
                 self.layer += [tf.nn.sigmoid(tf.matmul(self.layer[j-1], self.w[j]) + self.b[j])]
 
         # Passing global_step to minimize() will increment it at each step.
-        self.global_step = tf.Variable(0, trainable=False)
-        self.momentum = tf.Variable(self.init_momentum, trainable=False)
+        self.global_step = tf.compat.v1.Variable(0, trainable=False)
+        self.momentum = tf.compat.v1.Variable(self.init_momentum, trainable=False)
 
         # r=y[:,0]; Q=y[:,1]
         # prediction function (just one layer)
@@ -597,12 +608,12 @@ class rq(object):
                 # tf.mul returns x * y element-wise.
                 self.cost_function = tf.reduce_sum(
                              tf.multiply(self.c_h[:,0], self.r - tf.multiply(self.lambdaa_[:,0],self.L_[:,0]) 
-                                       + tf.scalar_mul(0.5, self.y[:,1]))
+                                       + tf.multiply(0.5, self.y[:,1]))
                                        + tf.divide(tf.multiply(self.lambdaa_[:,0], self.K_[:,0]), self.y[:,1])
                                        + tf.multiply(tf.divide(tf.multiply(self.lambdaa_[:,0],self.c), self.y[:,1]),
                                                 tf.abs(self.nr)))
                 self.c1 = tf.multiply(self.c_h[:,0], self.r - 
-                                tf.multiply(self.lambdaa_[:,0],self.L_[:,0])+ tf.scalar_mul(0.5, self.y[:,1]))
+                                tf.multiply(self.lambdaa_[:,0],self.L_[:,0])+ tf.multiply(0.5, self.y[:,1]))
                 self.c2 = tf.divide(tf.multiply(self.lambdaa_[:,0], self.K_[:,0]), self.y[:,1])
                 self.c3 = tf.multiply(tf.divide(tf.multiply(self.lambdaa_[:,0], self.c), self.y[:,1]),
                                       tf.abs(self.nr))
@@ -620,12 +631,12 @@ class rq(object):
                 # tf.mul returns x * y element-wise.
                 self.cost_function = tf.reduce_sum(
                              tf.multiply(self.c_h[:,0], self.r - tf.multiply(self.lambdaa_[:,0],self.L_[:,0]) 
-                                       + tf.scalar_mul(0.5, self.y[:,1]))
+                                       + tf.multiply(0.5, self.y[:,1]))
                                        + tf.divide(tf.multiply(self.lambdaa_[:,0], self.K_[:,0]), self.y[:,1])
                                        + tf.multiply(tf.divide(self.c, self.y[:,1]),
                                                 self.nr))
                 self.c1 = tf.multiply(self.c_h[:,0], self.r - 
-                                tf.multiply(self.lambdaa_[:,0],self.L_[:,0])+ tf.scalar_mul(0.5, self.y[:,1]))
+                                tf.multiply(self.lambdaa_[:,0],self.L_[:,0])+ tf.multiply(0.5, self.y[:,1]))
                 self.c2 = tf.divide(tf.multiply(self.lambdaa_[:,0], self.K_[:,0]), self.y[:,1])
                 self.c3 = tf.multiply(tf.divide(self.c, self.y[:,1]), self.nr)
                 self.single_cost_function = self.c1 + self.c2 + self.c3
@@ -641,9 +652,9 @@ class rq(object):
             self.c = tf.where(self.result, self.c_h[:,0], self.c_p[:,0])
             # cost function
             # tf.mul returns x * y element-wise.
-            if (loss_type is 'L2'):
+            if (self.loss_type == 'L2'):
                 self.cost_function = tf.reduce_mean(tf.square(tf.multiply(self.diff, self.c)))/2
-            elif (loss_type is 'L1'):
+            elif (self.loss_type == 'L1'):
                 self.cost_function = tf.reduce_mean(tf.abs(tf.multiply(self.diff, self.c)))/2
 
             self.nw_cost_function = tf.reduce_sum(tf.abs(tf.multiply(self.diff, self.c)))
@@ -659,20 +670,20 @@ class rq(object):
         # define the training paramters and model, gradient model and feeding the function
         #train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
         # train_step = tf.train.MomentumOptimizer(learning_rate,0.9).minimize(loss, global_step=global_step)
-        learning_rate = tf.train.exponential_decay(self.config.rl0, self.global_step,
+        learning_rate = tf.compat.v1.train.exponential_decay(self.config.rl0, self.global_step,
                                            self.config.decay_step, self.config.decay_rate_stair, staircase=True)                
-        self.train_step = tf.train.AdamOptimizer(learning_rate,0.9,0.999,1e-8).minimize(
+        self.train_step = tf.compat.v1.train.AdamOptimizer(learning_rate,0.9,0.999,1e-8).minimize(
                                 self.loss, global_step=self.global_step)
         # initilize the variables
-        self.saver = tf.train.Saverconfig.()
+        self.saver = tf.compat.v1.train.Saver()
         
-        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.compat.v1.global_variables_initializer())
         self.iter = 0
         
 
     def run_dnn(self):
-    ''' run the dnn method for a given number of iterations, print the results, 
-         and holds them in self.train_result, self.val_result, self.test_result'''
+        ''' run the dnn method for a given number of iterations, print the results, 
+        and holds them in self.train_result, self.val_result, self.test_result'''
         self.train_result = []
         self.test_result = []
         self.val_result = []
@@ -708,22 +719,21 @@ class rq(object):
                         out = self.sess.run([self.cost_function, self.y],feed_dict)
                         r = np.unique(out[1][:,0])
                         q = np.unique(out[1][:,1])
-                        print "(r,Q)= ", r, q
+                        print ("(r,Q)= ", r, q)
                     
                     if self.if_print_rQ_test_set:
-                        print ""
-                        print self.sess.run(self.y,feed_dict={self.x: self.train_x})
-                        print self.sess.run(self.y,feed_dict={self.x: self.valid_x})
+                        print ("")
+                        print (self.sess.run(self.y,feed_dict={self.x: self.train_x}))
+                        print (self.sess.run(self.y,feed_dict={self.x: self.valid_x}))
 
             self.saver.save(self.sess, self.model_dir+'/model', global_step=self.iter)
-            print "network weights are saved"
-
+            print ("network weights are saved")
 
         else:
             for i in range(self.config.maxiter):
                 batch = np.random.randint(0,self.train_size, size=self.config.batch_size) 
                 lr = self.config.rl0*np.power(1 + self.config.decay_rate*(i+1), -self.power)
-                self.sess.run(train_step, feed_dict={self.x:self.train_x[batch], self.y_:self.train_y[batch] , 
+                self.sess.run(self.train_step, feed_dict={self.x:self.train_x[batch], self.y_:self.train_y[batch] , 
                                         self.learning_rate:lr, self.c_p:self.shrtg_cost_tr[batch],
                                         self.c_h:self.hld_cost_tr[batch], self.zero:self.zeros_tr[batch]})
                 if np.mod(i, self.config.display) == 0:
@@ -736,47 +746,47 @@ class rq(object):
                     print ("Iter" , i, "lr %.6f" %lr , "| Train %.2f" %self.train_result ,
                            "| Test %.2f" %self.valid_result , 
                     "||W|| %.2f" %(self.sess.run(self.l2regularization)),
-                           "lmbd*||W|| %.2f" %(l2lambda*self.sess.run(self.l2regularization)) 
+                           "lmbd*||W|| %.2f" %(self.config.l2lambda*self.sess.run(self.l2regularization)) 
                           )
                     
     def print_EIL_DNN_costs(self):
         ''' get optimal solutions, prints the EIL and DNN cost and the improvement of DNN over EIL '''
-        print 'optimal solutions'
+        print('optimal solutions')
         cost_val = self.get_eil_cost(self.valid_y, self.ind_valid)
         cost_tr = self.get_eil_cost(self.train_y, self.ind_train)
-        print '\t   optimal' , '\t', '   DNN'
-        print 'train \t ', "%.1f" %cost_tr, '\t', "%.1f" %self.train_result[-1],\
-                '\t', "%.3f" %((self.train_result[-1] - cost_tr)/cost_tr)
-        print 'valid \t ', "%.1f" %cost_val, '\t', "%.1f" %self.val_result[-1],\
-                '\t', "%.3f" %((self.val_result[-1] - cost_val)/cost_val)
-        print 'avg train real cost',  cost_tr/self.train_size, ',avg validation real cost', \
-            cost_val/self.valid_size           
+        print('\t   optimal' , '\t', '   DNN')
+        print('train \t ', "%.1f" %cost_tr, '\t', "%.1f" %self.train_result[-1],\
+                '\t', "%.3f" %((self.train_result[-1] - cost_tr)/cost_tr))
+        print('valid \t ', "%.1f" %cost_val, '\t', "%.1f" %self.val_result[-1],\
+                '\t', "%.3f" %((self.val_result[-1] - cost_val)/cost_val))
+        print('avg train real cost',  cost_tr/self.train_size, ',avg validation real cost', \
+            cost_val/self.valid_size)
 
     def print_EIL_DNN_KNN_costs(self):
         ''' get optimal solutions '''
-        print 'optimal solutions'
+        print('optimal solutions')
         cost_val = self.get_eil_cost(self.valid_y, self.ind_valid)
         cost_te = self.get_eil_cost(self.test_y, self.ind_test)
         cost_tr = self.get_eil_cost(self.train_y, self.ind_train)
-        print '\t  \t  \t  optimal' , '\t', '     DNN' , '\t', '         KNN'
-        print self.dis,  self.clusters, 'train \t ', "%.1f" %cost_tr, '\t', "%.1f" %self.train_result[-1],\
-                '\t 0 \t', "%.3f" %((self.train_result[-1] - cost_tr)/cost_tr)
-        print self.dis,  self.clusters, 'valid \t ', "%.1f" %cost_val, '\t', "%.1f" %self.val_result[-1],\
-                '\t 0 \t', "%.3f" %((self.val_result[-1] - cost_val)/cost_val)
-        print self.dis,  self.clusters, 'test \t ', \
-        "%.1f" %cost_te, '\t', "%.1f" %self.test_result[-1],\
-                '\t', "%.1f" %(self.g_knn_total), \
-            '\t', "%.3f" %((self.test_result[-1] - cost_te)/cost_te)
-        print 'avg train real cost',  cost_tr/self.train_size, ',avg validation real cost', \
-            cost_val/self.valid_size, ',avg test real cost', cost_te/self.test_size                    
+        print('\t  \t  \t  optimal' , '\t', '     DNN' , '\t', '         KNN')
+        print(self.dis,  self.clusters, 'train \t ', "%.1f" %cost_tr, '\t', "%.1f" %self.train_result[-1],\
+                '\t 0 \t', "%.3f" %((self.train_result[-1] - cost_tr)/cost_tr))
+        print(self.dis,  self.clusters, 'valid \t ', "%.1f" %cost_val, '\t', "%.1f" %self.val_result[-1],\
+                '\t 0 \t', "%.3f" %((self.val_result[-1] - cost_val)/cost_val))
+        print(self.dis,  self.clusters, 'test \t ',
+              "%.1f" %cost_te, '\t', "%.1f" %self.test_result[-1],
+              '\t', "%.1f" %(self.g_knn_total),
+              '\t', "%.3f" %((self.test_result[-1] - cost_te)/cost_te))
+        print('avg train real cost',  cost_tr/self.train_size, ',avg validation real cost', \
+            cost_val/self.valid_size, ',avg test real cost', cost_te/self.test_size)
 
     
     def set_knn_settings(self, k_):
-    '''set k in knn algorithm '''
+        '''set k in knn algorithm '''
         self.k_ = k_
 
     def knn_saa(self):
-    '''runs a knn based on saa to obtain (r,Q) and it reports r_knn and Q_knn in the end. '''
+        '''runs a knn based on saa to obtain (r,Q) and it reports r_knn and Q_knn in the end. '''
         big_r = 1000
         zero_ = np.zeros(self.k_)
         nbrs = NearestNeighbors(n_neighbors=self.k_, algorithm='ball_tree').fit(self.train_x)
@@ -828,21 +838,20 @@ class rq(object):
                 self.K*self.lambdaa/self.Q_knn[te] + self.cp*self.lambdaa*nr/self.Q_knn[te]
             self.g_knn_total += g 
             if self.config.if_print_knn_solutions:
-                print te, '(', self.r_knn[te] ,',', self.Q_knn[te], ')', 'g(r,Q) is: ', g , i, 'iterations'
+                print(te, '(', self.r_knn[te] ,',', self.Q_knn[te], ')', 'g(r,Q) is: ', g , i, 'iterations')
         if self.config.if_print_knn_final_cost:
-            print self.g_knn_total
+            print(self.g_knn_total)
 
         
     def restore_dnn(self):
         ''' restore a saved dnn network'''
-        checkpoint = tf.train.get_checkpoint_state(self.model_dir)
+        checkpoint = tf.compat.v1.train.get_checkpoint_state(self.model_dir)
         if checkpoint and checkpoint.model_checkpoint_path:
             self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
-            print "Successfully loaded:", checkpoint.model_checkpoint_path
+            print("Successfully loaded:", checkpoint.model_checkpoint_path)
 
         else:
-            print "Could not find old network weights in", self.model_dir
-            
+            print("Could not find old network weights in", self.model_dir)            
     def call_dnn_fp(self):
         ''' calls the forward pass of train, validation, and the test datasets'''
         self.rq_test = self.sess.run(self.y,feed_dict={self.x: self.test_x})
@@ -1024,7 +1033,7 @@ class rq(object):
 
 
         if not self.config.use_current_trained_network:
-            tf.reset_default_graph()
+            tf.compat.v1.reset_default_graph()
 
             # create the dnn model  
             self.set_dnn_settings()
@@ -1139,20 +1148,20 @@ class rq(object):
                 self.IL_eil[i,t+1] = self.IL_eil[i,t] + self.AO_eil[i,t]     
 
                 if t%20 == 0: 
-                    print t, "periods passed of item ", i
-        print "dnn \t", "knn \t", "eil \t"
-        print self.dis, self.clusters, "%0.2f" %(sum(np.sum(self.dnn_cost, axis=1))), \
+                    print(t, "periods passed of item ", i)
+        print("dnn \t", "knn \t", "eil \t")
+        print(self.dis, self.clusters, "%0.2f" %(sum(np.sum(self.dnn_cost, axis=1))), \
             "%0.2f" %(sum(np.sum(self.knn_cost, axis=1))), \
-            "%0.2f" %(sum(np.sum(self.eil_cost, axis=1)))
-        print self.dis, "mean", self.clusters, "%0.2f" %(np.mean(self.dnn_cost)), \
+            "%0.2f" %(sum(np.sum(self.eil_cost, axis=1))))
+        print(self.dis, "mean", self.clusters, "%0.2f" %(np.mean(self.dnn_cost)), \
             "%0.2f" %(np.mean(self.knn_cost)), \
-            "%0.2f" %(np.mean(self.eil_cost))
-        print self.dis, "std", self.clusters, "%0.2f" %(np.std(self.dnn_cost)), \
+            "%0.2f" %(np.mean(self.eil_cost)))
+        print(self.dis, "std", self.clusters, "%0.2f" %(np.std(self.dnn_cost)), \
             "%0.2f" %(np.std(self.knn_cost)), \
-            "%0.2f" %(np.std(self.eil_cost))
-        print self.dis, "obs_count", self.clusters, "%d" %(obs_count) 
-        print self.dis, self.clusters, "cpu times are %0.2f" %(dnn_time), \
-            "%0.2f" %(knn_time)        
+            "%0.2f" %(np.std(self.eil_cost)))
+        print(self.dis, "obs_count", self.clusters, "%d" %(obs_count)) 
+        print(self.dis, self.clusters, "cpu times are %0.2f" %(dnn_time), \
+            "%0.2f" %(knn_time))        
 
 
     def get_network(self, net_num):
@@ -1166,14 +1175,14 @@ class rq(object):
         self.model_dir = os.path.join(self.model_dir, str(net_num))
         # print self.model_dir
         update_checkpoint(net_num, self.model_dir)
-        checkpoint = tf.train.get_checkpoint_state(self.model_dir)
+        checkpoint = tf.compat.v1.train.get_checkpoint_state(self.model_dir)
         w =[]
         cnt = 0 
         if checkpoint and checkpoint.model_checkpoint_path:
             var_list = checkpoint_utils.list_variables(self.model_dir)
             for v in var_list:
                 if 'Adam_' in v[0]:
-                    print v            
+                    print(v)            
                     if cnt == 0:
                         w += [v[1][0]]
                     if len(v[1]) == 1:
@@ -1212,7 +1221,7 @@ class rq(object):
                 self.test_data_dic[i] = test_data_pd[test_data_pd[0]==i].values
 
 
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         # create the dnn model  
         self.set_dnn_settings()
@@ -1293,12 +1302,12 @@ class rq(object):
 
                 self.IL_dnn[i,t+1] = self.IL_dnn[i,t] + self.AO_dnn[i,t]
 
-        print "dnn \t"
-        print self.dis, self.clusters, net_num, "%0.2f" %(sum(np.sum(self.dnn_cost, axis=1)))
-        print self.dis, "mean", self.clusters, net_num,  "%0.2f" %(np.mean(self.dnn_cost))
-        print self.dis, "std", self.clusters, net_num,  "%0.2f" %(np.std(self.dnn_cost))
-        print self.dis, "obs_count", self.clusters, net_num,  "%d" %(obs_count) 
-        print self.dis, self.clusters, "cpu times are %0.2f" %(dnn_time)
+        print("dnn \t")
+        print(self.dis, self.clusters, net_num, "%0.2f" %(sum(np.sum(self.dnn_cost, axis=1))))
+        print(self.dis, "mean", self.clusters, net_num,  "%0.2f" %(np.mean(self.dnn_cost)))
+        print(self.dis, "std", self.clusters, net_num,  "%0.2f" %(np.std(self.dnn_cost)))
+        print(self.dis, "obs_count", self.clusters, net_num,  "%d" %(obs_count)) 
+        print(self.dis, self.clusters, "cpu times are %0.2f" %(dnn_time))
 
 
 
@@ -1316,10 +1325,10 @@ def restore_and_run(distribution, cluster, nodes, last_run, str_no, max_iter=500
         real_cluster=203
     else:
         real_cluster = cluster
-    print dist, cluster
+    print(dist, cluster)
 
     # initialize everything
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     config.decay_rate = 0.0005
     config.decay_rate_stair = 0.96     
     config.starter_learning_rate = lr
@@ -1381,9 +1390,9 @@ def run_new_model(distribution, cluster, nodes, last_run, str_no, max_iter=50000
         real_cluster=203
     else:
         real_cluster = cluster
-    print dist, cluster
+    print(dist, cluster)
 
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     config.decay_rate = 0.0005
     config.decay_rate_stair = 0.96     
     config.starter_learning_rate = lr
@@ -1439,10 +1448,10 @@ def load_rnn_saved_model(dist, cluster):
         real_cluster=203
     else:
         real_cluster = cluster
-    print dist, cluster
+    print(dist, cluster)
 
     # initialize everything
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     rq_model=rq(cluster, real_cluster, dist, config)
     rq_model.get_data()
     rq_model.get_mu_sigma()
@@ -1487,16 +1496,14 @@ def load_rnn_saved_model(dist, cluster):
     out = rq_model.test_result
     r = np.unique(out[0][1][:,0])
     q = np.unique(out[0][1][:,1])
-    print ""
-    print "cost= %0.2f" %(out[0][0])
-    print "(r,Q)=", r, q
+    print("")
+    print("cost= %0.2f" %(out[0][0]))
+    print("(r,Q)=", r, q)
 
 
 def call_simulator(config, distribution, cluster):
 
-    distributions=['normal', 'beta', 'lognormal', 'exponential', 'uniform']
-
-    dist = distributions[int(distribution)]
+    dist = distribution
 
     config.if_print_knn_final_cost = False
     config.if_print_knn_solutions = False
@@ -1510,7 +1517,7 @@ def call_simulator(config, distribution, cluster):
     else:
         cluster_real = cluster
 
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     rq_model=rq(cluster, cluster_real, dist, config)
     rq_model.get_data()
     rq_model.get_mu_sigma()
@@ -1520,9 +1527,7 @@ def call_simulator(config, distribution, cluster):
 
 def run_simulator_get_best_network(config, distribution, cluster):
     ''' This function calls '''
-    distributions=['normal', 'beta', 'lognormal', 'exponential', 'uniform']
-
-    dist = distributions[int(distribution)]
+    dist = distribution
 
     config.if_print_knn_final_cost = False
     config.if_print_knn_solutions = False
@@ -1536,7 +1541,7 @@ def run_simulator_get_best_network(config, distribution, cluster):
     else:
         cluster_real = cluster
 
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     rq_model=rq(cluster, cluster_real, dist, config)
 
     for i in range(100):
@@ -1547,9 +1552,7 @@ def run_simulator_get_best_network(config, distribution, cluster):
 
 def run_dnn_simulator_single_specific_network(config, distribution, cluster, str_num):
     ''' This function calls '''
-    distributions=['normal', 'beta', 'lognormal', 'exponential', 'uniform']
-
-    dist = distributions[int(distribution)]
+    dist = distribution
 
     config.if_print_knn_final_cost = False
     config.if_print_knn_solutions = False
@@ -1563,7 +1566,7 @@ def run_dnn_simulator_single_specific_network(config, distribution, cluster, str
     else:
         cluster_real = cluster
 
-    tf.reset_default_graph()
+    tf.compat.v1.reset_default_graph()
     rq_model=rq(cluster, cluster_real, dist, config)
 
     rq_model.get_data()
@@ -1571,28 +1574,71 @@ def run_dnn_simulator_single_specific_network(config, distribution, cluster, str
     rq_model.set_rq_settings()        
     rq_model.run_simulator_select_best(str_num)
 
-if __name__ == '__main__':
-    dist = sys.argv[1] # distribution
-    cluster = int(sys.argv[2]) # cluster
-    if len(sys.argv) >=4:
-        # 1-> it runs all saved network, otherwise it runs the best selected network. 
-        run_type = int(sys.argv[3]) 
-    else:
-        run_type = 0
-    if len(sys.argv) >=5:
-        # 1-> it runs just a single structure with a given str number, otherwise it runs all structures
-        str_num = int(sys.argv[4]) # cluster
-    else:
-        str_num = 0
-    config, unparsed = parser.parse_known_args()
+def ask_user_for_init():
+    # 1. 询问分布类型
+    distributions = ['normal', 'beta', 'lognormal', 'exponential', 'uniform']
+    print("请选择分布类型：")
+    for i, d in enumerate(distributions):
+        print(f"{i+1}. {d}")
+    while True:
+        try:
+            dist_idx = int(input("输入分布编号（1-5）：")) - 1
+            if 0 <= dist_idx < len(distributions):
+                dist = distributions[dist_idx]
+                break
+        except Exception:
+            pass
+        print("输入有误，请重新输入。")
+    # 2. 询问类别
+    clusters = [1, 10, 100, 200]
+    print("请选择类别：")
+    for i, c in enumerate(clusters):
+        print(f"{i+1}. {c}")
+    while True:
+        try:
+            cluster_idx = int(input("输入类别编号（1-4）：")) - 1
+            if 0 <= cluster_idx < len(clusters):
+                cluster = clusters[cluster_idx]
+                break
+        except Exception:
+            pass
+        print("输入有误，请重新输入。")
+    return dist, cluster
 
-    if str_num != 0:
-        run_dnn_simulator_single_specific_network(config, dist, cluster, str_num)
-    if run_type == 1:
-        run_simulator_get_best_network(config, dist, cluster)
+def check_and_generate_data(dist, cluster):
+    # 生成目标文件名
+    if dist in ['normal', 'lognormal', 'uniform'] and cluster == 100:
+        real_cluster = 103
+    elif cluster == 200:
+        real_cluster = 203
     else:
-        # load_run_saved_model(dist, cluster)
-        call_simulator(config, dist, cluster)
+        real_cluster = cluster
+    data_dir = f"data/{dist}/"
+    files_needed = [
+        f"TrainX-nw-10000-{real_cluster}-class.mat",
+        f"TrainY-nw-10000-{real_cluster}-class.mat",
+        f"TestX-nw-10000-{real_cluster}-class.mat",
+        f"TestY-nw-10000-{real_cluster}-class.mat",
+        f"IndexX-nw-10000-{real_cluster}-class.mat",
+        f"IndexY-nw-10000-{real_cluster}-class.mat"
+    ]
+    missing = [f for f in files_needed if not os.path.exists(os.path.join(data_dir, f))]
+    if missing:
+        print("检测到数据文件缺失，正在自动生成数据...")
+        script_path = f"data/generator/{dist}/nw-simulation-{cluster}-class.py"
+        # 用当前python环境调用
+        subprocess.run([sys.executable, script_path])
+    else:
+        print("数据文件已存在，无需重新生成。")
+
+# 在主入口前插入
+if __name__ == '__main__':
+    # 如果没有命令行参数，则进入交互式模式
+    if len(sys.argv) < 3:
+        dist, cluster = ask_user_for_init()
+        check_and_generate_data(dist, cluster)
+        sys.argv = [sys.argv[0], dist, str(cluster)]
+    # 后续主流程不变
 
 
 

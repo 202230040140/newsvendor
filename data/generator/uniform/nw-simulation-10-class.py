@@ -10,6 +10,7 @@ import tempfile
 import sklearn
 import sklearn.datasets
 import sklearn.linear_model
+from sklearn import model_selection
 
 import scipy.stats as stso
 np.random.seed(seed=4)
@@ -17,6 +18,7 @@ np.random.seed(seed=4)
 import sys
 a = int(sys.argv[0].split('-')[2])
 
+os.makedirs('data/uniform', exist_ok=True)
 
 if a == 1:
     cluster=1
@@ -64,7 +66,7 @@ for i in range(cluster):
                 inputs += [np.concatenate((binary_day[i%2 + 1] , binary_department[i%5 + 1]) , axis = 1)]
                 index += [[i, 5*(i+1), 15 + 5*(i+1)]]
         #fGroup.write(str(binary_day[1]) + ',' + str(binary_department[1]) + ',' + str(binary_month[1]) + ',' +  str(row)  + '\n')  
-print "done" 
+print("done") 
 
 #inputs += [np.concatenate((binary_day[1] , binary_month[3]) , axis = 1)]
 #fGroup.close()      
@@ -73,17 +75,20 @@ print "done"
 
 # Split into train and test                                                                                                                     
 
-X, Xt, y, yt, ind, indt = sklearn.cross_validation.train_test_split(inputs, suma, index, train_size=7500)
+X, Xt, y, yt, ind, indt = model_selection.train_test_split(inputs, suma, index, train_size=7500)
 
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/IndexX-nw-10000-10-class', mdict={'IndexX': ind})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/IndexY-nw-10000-10-class', mdict={'IndexY': indt})
+y = np.array(y)
+yt = np.array(yt)
 
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/TrainX-nw-10000-10-class', mdict={'trainX': X})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/TrainY-nw-10000-10-class', mdict={'trainY': y})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/TestX-nw-10000-10-class', mdict={'testX': Xt})
-sio.savemat('/home/afo214/tensorflow/newsvendor/simulation/data/uniform/TestY-nw-10000-10-class', mdict={'testY': yt})
+sio.savemat('data/uniform/IndexX-nw-10000-10-class.mat', mdict={'IndexX': ind})
+sio.savemat('data/uniform/IndexY-nw-10000-10-class.mat', mdict={'IndexY': indt})
 
-print "done" 
+sio.savemat('data/uniform/TrainX-nw-10000-10-class.mat', mdict={'trainX': X})
+sio.savemat('data/uniform/TrainY-nw-10000-10-class.mat', mdict={'trainY': y})
+sio.savemat('data/uniform/TestX-nw-10000-10-class.mat', mdict={'testX': Xt})
+sio.savemat('data/uniform/TestY-nw-10000-10-class.mat', mdict={'testY': yt})
+
+print("done") 
 
 Trainh5 = 'Train-nw-10000-10-class.h5'
 Traintxt = 'Train-nw-10000-10-class.txt'
